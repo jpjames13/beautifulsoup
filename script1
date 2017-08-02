@@ -1,0 +1,171 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Jul 23 12:08:48 2017
+
+@author: Carnage
+"""
+
+from bs4 import BeautifulSoup
+import urllib.request
+import csv
+
+
+
+"""
+    when main is called, it reads .about information from apptopia 
+    and writes to a csv file.
+"""
+def main():
+    
+    soup_ = readHTML('file:///C:/Users/Carnage/Desktop/Arizona%20State/CIS%20440/iTunesProductivity/338061150_about.htm')
+
+    dataTable =  (ReturnTable(soup_))
+    
+    
+    WriteToCsv(dataTable)
+    
+#add method to read apptopia data
+#add method to write to csv
+
+
+
+
+'''
+    readHTML method reads input path
+'''
+def readHTML(InputPath):
+    
+    page = urllib.request.urlopen(InputPath).read()
+    soup = BeautifulSoup(page, "lxml")
+
+    return soup
+'''
+    END OF METHOD
+'''
+###############################################################################    
+'''
+    ReturnTable method will return a table containing the necessary 
+    .about data pulled from apptopia.
+'''
+def ReturnTable(_soup):
+    #table variables
+    table1 = _soup.find('table')
+    table_rows = table1.find_all('tr')
+
+    #list variables
+    appNames = ""
+    descriptions = []
+    versions = []
+    versionMonth = []
+    versionYear = []
+    ratingstars = ""
+    totalraters = []
+    alltimeRating = []
+    last30daysRate = []
+    table = []
+    #types of data to be extracted
+    
+
+    #saves appName and descriptions to a list
+    for appInfo in _soup.find('main', attrs={'id': 'content'}):
+        for appName in appInfo.findAll("div",{"class":"media-body"}):
+            appNames = (appName.find('h1').text)
+            #print(appNames)
+        for description in appInfo.findAll("div",{"class":"version-description"}):
+            desc = (description.find('p').text)
+            
+            #if no description then text becomes a "." period
+            if desc != "":
+                descriptions.append(desc)
+            else:
+                null = "."
+                descriptions.append(null)
+    
+    
+    #saves versionsNo, version month and year to list
+    for tr in table_rows:
+        for i in tr.find_all('h3'):
+            #this represents the version no
+            versions.append(i.text)
+        for i in tr.find_all("div",{"class":"month"}):
+            versionMonth.append(i.text)
+        for i in tr.find_all("div",{"class":"year"}):
+            versionYear.append(i.text)
+            
+
+    #prints out ratings
+    for ratings in _soup.findAll("div",{"class":"rating_allstars"}):
+    #    print(ratings.find('div'))
+        ratingstars = ratings.find('div')
+        
+        #prints out total ratings
+        for totalratings in _soup.findAll("div",{"class":"ratings-totals"}):
+            #    print(totalratings.find('div').text)
+            try:
+                #totalraters.append(totalratings.find('div').text)
+                x = totalratings.find('div').text
+                totalraters.append(x)
+                
+                if totalraters != "":
+                    alltimeRating = totalraters[1]
+                    last30daysRate = totalraters[0]
+            
+            except:
+                x = ""       
+
+                if x == "":
+                    null = "."
+                    alltimeRating = null
+                    last30daysRate = null
+            
+            
+    #appending list to table to be returned
+    for i in range(len(versions)):
+        row = []
+        row.append(appNames)
+        row.append(versions[i].replace("Version ",""))
+        row.append(versionMonth[i])
+        row.append(versionYear[i])
+        row.append(ratingstars.replace(",",""))
+        #the .replace function only works with strings
+        #you've been screwing up because you were trying to use the function on
+        #list objects
+        row.append(descriptions[i].replace("\n","").replace(",","").replace("<br>",""))
+        row.append(alltimeRating)
+        row.append(last30daysRate)
+        table.append(row)
+        
+    return table
+
+'''
+    END OF METHOD
+'''
+###############################################################################
+
+'''
+    WriteToCsv method is quite intuitive
+'''
+def WriteToCsv(tableInput):
+    with open("about_data.csv", 'w') as myFile:
+       #wr = csv.writer(myFile, lineterminator='\n')
+        
+       for row in tableInput:
+        for column in row:
+            #if column .contains /n then remove 
+            myFile.write('%s,' % column)
+            print(column)
+        myFile.write('\n')
+        print('\n')
+       #wr.writerow(l)
+       
+       myFile.close
+        
+'''
+    END OF METHOD
+'''
+
+###############################################################################
+
+#if this script is not being imported it will run main
+if __name__ == '__main__':
+    main()
