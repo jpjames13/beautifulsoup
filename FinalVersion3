@@ -1,0 +1,392 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Jul 23 12:08:48 2017
+
+@author: Carnage
+"""
+
+from bs4 import BeautifulSoup
+import urllib.request
+import csv
+import glob
+import os
+import re
+from chardet.universaldetector import UniversalDetector
+
+
+base_path = "\\Users\\Carnage\\"
+file_path = base_path+"\Desktop\Arizona State\CIS 440\iTunesProductivity"
+
+
+"""
+    when main is called, it reads .about information from apptopia 
+    and writes to a csv file.
+"""
+def main():
+    
+    ###############################################
+    '''
+        Edit these variable to name your CSV file's
+    '''
+    ###############################################
+    about_data_fileName = "about_data"
+    version_data_fileName = "version_data"
+    ###############################################
+    ###############################################
+    
+    
+    os.chdir(file_path)
+    #writing headers
+    writeAboutHeader(file_path,about_data_fileName)
+    writeVersionHeader(file_path,version_data_fileName)
+    for file_type in glob.glob('*about.htm'):
+        url = file_type
+        appID = getAppID(url)
+               
+        #soup_ will be meant for about data
+        soup_ = readHTML(file_type)
+        
+        #_soup will be meant for version data
+        # _soup = readHTML(file_type)
+        
+        try:
+            #gets about data in table format
+            aboutDataTable =  (ReturnAboutTable(appID,soup_))
+            #gets version data in table format
+            versionDataTable =  (ReturnVersionTable(appID,soup_))
+            
+            #file name needs to be in quotations in the argument for write to csv method to be in seperate files
+            WriteToCsv(aboutDataTable,about_data_fileName)
+            
+            #uncomment this later !!!!!!!!!!!!!!!!!!!
+            WriteToCsv(versionDataTable,version_data_fileName)
+        except Exception:
+            print("oops! e")
+            pass
+        except AttributeError:
+            print("oops! a")
+            pass  
+
+    print("Finished Processing")
+
+'''
+    readHTML method reads input path
+'''
+def readHTML(InputPath):
+    
+    try:
+        page = open(InputPath).read()
+        soup = BeautifulSoup(page, "html.parser")
+        return soup
+    except Exception:
+        print("oops! exception")
+        pass
+    except AttributeError:
+        print("oops! attribute")
+        pass
+'''
+    END OF METHOD
+'''
+###############################################################################    
+'''
+    ReturnAboutTable method will return a table containing the necessary 
+    .about data pulled from apptopia.
+'''
+def ReturnAboutTable(appid,_soup):
+    
+    #table variables
+    table1 = _soup.find('table')
+    table_rows = table1.find_all('tr')
+    
+    #list variables
+    appNames = ""
+    # scope creep things that are commented out goes into ReturnVersionTable method 
+    descriptions = []
+    versions = []
+    #versionMonth = []
+    #versionYear = []
+    ratingstars = []
+    ratingstar = ""
+    alltimeRating = []
+    last30daysRate = []
+    table = []
+    #types of data to be extracted
+    
+
+    #saves appName to a list
+    for appInfo in _soup.find('main', attrs={'id': 'content'}):
+        for appName in appInfo.findAll("div",{"class":"media-body"}):
+            appNames = (appName.find('h1').text)    
+
+    #prints out ratings
+    for ratings in _soup.findAll("div",{"class":"rating_allstars"}):
+    #    print(ratings.find('div'))
+        ratingstar = ratings.find('div')
+        #converting the none type object to a 1-5 scale with the ConvertRatings method
+        ratingstars = ConvertRatings(ratingstar)
+        
+        #prints out total ratings
+        for checkAllTime in _soup.find("div",{"class":"h-tab-item hide"}):
+            #totalraters.append(totalratings.find('div').text)           
+            alltime = (_soup.findAll("div",{"class":"stat-huge text-center"}))
+            try:
+
+                #utilizing regex to extract int from css 
+                #list of 2 ints 1st is 30 days 2nd is all time
+                ratinglist = re.findall('\d+', str(alltime))
+                
+                #if ValidateRatings(_soup) == False:
+                if len(ratinglist)>1:
+                    alltimeRating = (ratinglist[1])
+                    last30daysRate = (ratinglist[0])
+                else:
+                    #even if there is no last 30 day rating there might be all time
+                    alltimeRating = (ratinglist[0])
+                    
+            except:
+                x = ""       
+
+                if x == "":
+                    null = "."
+                    alltimeRating = null
+                    last30daysRate = null
+    
+    #saves versionsNo
+    for tr in table_rows:
+        for i in tr.find_all('h3'):
+            #this represents the version no
+            versions.append(i.text)
+
+    #print(versions)
+    
+    #extracts app description
+    for description in _soup.findAll("div",{"class":"app-description"}):   
+        descriptions.append(description.find('p').text)
+                        
+    #appending list to table to be returned
+        row = []       
+        #row.append(range(version))         
+        row.append(appid)
+        row.append(appNames.replace("\n","").replace(",","").replace("<br>",""))
+        #row.append(versions[i].replace("Version ",""))
+        #row.append(versionMonth[i])
+        #row.append(versionYear[i])
+        row.append(kIsBad(ratingstars))
+        #the .replace function only works with strings
+        #you've been screwing up because you were trying to use the function on
+        #list objects
+        #row.append(descriptions[i].replace("\n","").replace(",","").replace("<br>",""))        
+        row.append(kIsBad(alltimeRating))
+        row.append(kIsBad(last30daysRate))
+        table.append(row)
+        
+        return table
+
+'''
+    END OF METHOD
+'''
+###############################################################################
+'''
+    ReturnVersionTable method will return a table containing the necessary 
+    .version data pulled from apptopia.
+'''
+def ReturnVersionTable(appId,soup_):
+    #table variables
+    table1 = soup_.find('table')
+    table_rows = table1.find_all('tr')
+
+    #list variables
+    appNames = ""
+    descriptions = []
+    versions = []
+    versionMonth = []
+    versionYear = []
+    #ratingstars = ""
+    #totalraters = []
+    #alltimeRating = []
+    #last30daysRate = []
+    table = []
+    #types of data to be extracted
+    
+
+    #saves appName and descriptions to a list
+    for appInfo in soup_.find('main', attrs={'id': 'content'}):
+        for appName in appInfo.findAll("div",{"class":"media-body"}):
+            appNames = (appName.find('h1').text)
+            #print(appNames)
+        for description in appInfo.findAll("div",{"class":"version-description"}):
+            desc = (description.find('p').text)
+            
+            #if no description then text becomes a "." period
+            if desc != "":
+                descriptions.append(desc)
+            else:
+                null = "."
+                descriptions.append(null)
+    
+    
+    #saves versionsNo, version month and year to list
+    for tr in table_rows:
+        for i in tr.find_all('h3'):
+            #this represents the version no
+            versions.append(i.text)
+        for i in tr.find_all("div",{"class":"month"}):
+            versionMonth.append(i.text)
+        for i in tr.find_all("div",{"class":"year"}):
+            versionYear.append(i.text)
+                                    
+    #appending list to table to be returned
+    for i in range(len(versions)):
+        row = []
+        row.append(appId)
+        row.append(appNames)
+        row.append(versions[i].replace("Version ",""))
+        row.append(versionYear[i]+" "+versionMonth[i])
+        #row.append(versionYear[i])
+        #the .replace function only works with strings
+        #you've been screwing up because you were trying to use the function on
+        #list objects
+        row.append(descriptions[i].replace("\n","").replace(",","").replace("<br>",""))
+        table.append(row)
+        
+    return table
+
+'''
+    END OF METHOD
+'''
+###############################################################################
+'''
+    This method checks to see if app is rated
+'''
+def ValidateRatings(soop):
+    
+    invalidstr = "This app has not yet been rated."
+    null = False
+    valid = True
+    
+    for appInfo in soop.find('div', attrs={'class': 'text-center'}):
+        x = (appInfo.text) 
+    
+    if x == invalidstr:
+        return (null)
+    else:
+        return valid
+
+###############################################################################
+
+'''
+    WriteToCsv method is quite intuitive
+'''
+#write to csv now takes two arguments
+def WriteToCsv(tableInput,fileName):
+    with open(fileName+".csv", 'a') as myFile:        
+       for row in tableInput:
+        for column in row:
+            #if column .contains /n then remove 
+            myFile.write('%s,' % column)
+        myFile.write('\n')
+        print('\n')
+       #identify which rows script is processing
+       print("Currently Processing ... "+row[1])
+       print('\n')
+       myFile.close
+
+        
+'''
+    END OF METHOD
+'''
+
+###############################################################################
+'''
+    None type object conversion method for Ratings
+'''
+def ConvertRatings(noneType):
+        
+        #converting the damn none type object to a string
+        ratingstar_ = str(noneType)
+
+        #using regex, this saves the floating numbers or int from string to a list
+        ratingstars__ = re.findall(r"[+-]? *(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", ratingstar_)
+        
+        #ratingstars__ is a list of [0]data-ce-keys where applies
+        #and the floating numbers that we need for the ratings
+        #if len list is more than 1 remove [0] first item and assign
+        #to ratingstars 
+        if len(ratingstars__) > 1:
+            x = ratingstars__[1:]
+            ratingstars = x[0]
+        else:
+            ratingstars = ratingstars__[0]
+        
+        ratingstar = float(ratingstars)
+        
+        #scaling it to 5 stars
+        rating = 5*(ratingstar/100)
+        
+        #round down to 2 decimals
+        ratings = str(round(rating, 2))
+        
+        return ratings
+###############################################################################
+'''
+    Method gets App Id
+'''
+def getAppID(url):
+    appID = url.replace("_about.htm","")
+    return appID
+
+###############################################################################
+'''
+    Write Header Method
+'''
+def writeAboutHeader(filepath, fileName):
+    header = ["App ID", "App Name", "All Time Ratings", "Total Raters","No. Raters in the last 30 Days"]
+    with open(filepath+'\\'+fileName+'.csv','w+') as f:
+        dw = csv.DictWriter(f, fieldnames = header)
+        dw.writeheader()
+        
+###############################################################################
+###############################################################################
+'''
+    Write Header Method
+'''
+def writeVersionHeader(filePath,FileName):
+    header = ["App ID", "App Name", "Version No.", "Version Date","Version Description"]
+    with open(filePath+'\\'+FileName+'.csv','w+') as f:
+        dw = csv.DictWriter(f, fieldnames = header)
+        dw.writeheader()
+        
+###############################################################################
+'''
+    Converting K to 000 and M to 000000 
+'''
+def kIsBad(x):
+    
+    y = 0
+    j = []
+
+    if 'K' in x:
+        b = x.replace("K","")
+        y = float(b) * 1000
+        return y
+    if 'M' in x:
+        b = x.replace('M', '')
+        y = int(b) * 1000000
+        return y
+    if 'B' in x:
+        b= x.replace('B', '')
+        y = int(b) * 1000000000
+        return y
+    #if its an empty list
+    elif x == j:
+        return (".")
+    else:
+        return x
+    
+
+        
+###############################################################################
+
+#if this script is not being imported it will run main
+if __name__ == '__main__':
+    main()
